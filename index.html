@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <script src="index.js" type="module"></script>
+</head>
+<body>
+  <header>
+    <h1>take 5</h1>
+  </header>
+  <main>
+    <section>
+      Posts
+      <post-content title="Hello!"></post-content>
+    </section>
+  </main>
+</body>
+</html>
+
+<template id="post-content">
+  <style>
+    p {
+      color: green;
+    }
+  </style>
+  <p><slot name="title">Post</slot></p>
+</template>
