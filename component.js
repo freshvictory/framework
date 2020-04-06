@@ -21,6 +21,20 @@ export function define(options) {
     .map(s => s.getAttribute('name'));
 
   const [data, watchers] = computeReactive(options, slots);
+
+  if (options.listeners) {
+    for (const name in options.listeners) {
+      if (window[name]) {
+        return;
+      }
+
+      window[name] = function (el) {
+        return options.listeners[name].bind(
+          el.getRootNode().host.data
+        )();
+      }
+    }
+  }
   
   const elementClass = buildElementClass(
     data, watchers, content, slots
@@ -41,8 +55,12 @@ function computeReactive(options, slots) {
         watchers[key] = options.data[key];
         break;
       case 'object':
-        data[key] = options.data[key].default;
-        watchers[key] = options.data[key].watcher;
+        if (options.data[key].default) {
+          data[key] = options.data[key].default;
+        }
+        if (options.data[key].watcher) {
+          watchers[key] = options.data[key].watcher;
+        }
         break;
       default:
         data[key] = options.data[key];
@@ -60,7 +78,7 @@ function computeReactive(options, slots) {
 }
 
 
-function buildElementClass( data, watchers, content) {
+function buildElementClass(data, watchers, content) {
   const attributes = Object.keys(data);
 
   const elementClass = class extends Component {
@@ -72,15 +90,16 @@ function buildElementClass( data, watchers, content) {
     constructor() {
       super(content);
       this.slots = undefined;
-      this.data = new Proxy(data, {
+      this.data = new Proxy({}, {
         get: (obj, prop) => {
-          return this.getAttribute(prop) || obj[prop]
+          return this.getAttribute(prop) || obj[prop] || data[prop]
         },
         set: (obj, prop, value) => {
-          if (prop in obj) {
+          if (prop in data) {
             this.setAttribute(prop, value);
-            obj[prop] = value;
           }
+
+          obj[prop] = value;
     
           return true;
         }
@@ -107,10 +126,12 @@ function buildElementClass( data, watchers, content) {
       if (typeof names === 'string') { names = [names]; }
   
       for (const name of names) {
-        if ('push' in this.slots[name]) {
-          this.slots[name].forEach(s => s.innerHTML = this.data[name]);
-        } else {
-          this.slots[name].innerHTML = this.data[name];
+        if (this.slots[name]) {
+          if ('push' in this.slots[name]) {
+            this.slots[name].forEach(s => s.innerHTML = this.data[name]);
+          } else {
+            this.slots[name].innerHTML = this.data[name];
+          }
         }
       }
     }
@@ -130,7 +151,7 @@ function buildElementClass( data, watchers, content) {
             if ('push' in this.slots[name]) {
               this.slots[name].push(slot);
             } else {
-              this.slots[name] = [this.slots[name], slot];
+              this.slots[name] = [...this.slots[name], slot];
             }
           } else {
             this.slots[name] = slot;
