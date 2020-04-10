@@ -43,7 +43,7 @@
   <p data="title"></p>
   <p data="count"></p>
   <ul>
-    <li></li>
+    <li for="list"></li>
   </ul>
   <button @click="handleClick">Click me!</button>
 
@@ -59,11 +59,13 @@
     id: 'post-content',
     data: {
       count: 0,
-      title: 'Post'
+      title: 'Post',
+      list: ['a', 'b', 'c']
     },
     methods: {
       handleClick() {
         this.title = 'Clicked ' + ++this.count + ' times.';
+        this.list = [...this.list, this.count];
       }
     }
   });

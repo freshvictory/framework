@@ -77,6 +77,8 @@ function buildElementClass(data, content, methods) {
           return this.getAttribute(prop) || obj[prop] || data[prop]
         },
         set: (obj, prop, value) => {
+          obj[prop] = value;
+
           if (prop in data) {
             if (typeof value === 'string' || typeof value === 'number') {
               this.setAttribute(prop, value);
@@ -84,8 +86,6 @@ function buildElementClass(data, content, methods) {
               this.rerender(prop);
             }
           }
-
-          obj[prop] = value;
     
           return true;
         }
@@ -122,8 +122,28 @@ function buildElementClass(data, content, methods) {
       if (typeof names === 'string') { names = [names]; }
   
       for (const name of names) {
-        for (const element of this.reactiveElements[name]) {
-          element.innerHTML = this.data[name];
+        for (let i = 0; i < this.reactiveElements[name].length; i++) {
+          const element = this.reactiveElements[name][i];
+          switch(typeof this.data[name]) {
+            case 'object':
+              if (typeof this.data[name][Symbol.iterator] === 'function') {
+                const parent = element.parentNode;
+                parent.innerHTML = '';
+
+                for (const val of this.data[name]) {
+                  const newElement = parent.appendChild(element.cloneNode(true));
+                  newElement.innerHTML = val;
+                  this.reactiveElements[name][i] = newElement;
+                }
+              }
+              break;
+            case 'symbol':
+            case 'function':
+            case 'undefined':
+              break;
+            default:
+              element.innerHTML = this.data[name];
+          }
         }
       }
     }
@@ -140,8 +160,9 @@ function buildElementClass(data, content, methods) {
         this.reactiveElements[dataName] = [];
       }
       
-      for (const element of this.shadowRoot.querySelectorAll('[data]')) {
-        this.reactiveElements[element.getAttribute('data')].push(element);
+      for (const element of this.shadowRoot.querySelectorAll('[data], [for]')) {
+        const name = element.getAttribute('data') || element.getAttribute('for');
+        this.reactiveElements[name].push(element);
       }
 
       return this.reactiveElements;
