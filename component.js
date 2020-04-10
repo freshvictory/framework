@@ -83,7 +83,7 @@ function buildElementClass(data, content, methods) {
             if (typeof value === 'string' || typeof value === 'number') {
               this.setAttribute(prop, value);
             } else {
-              this.rerender(prop);
+              this.rerender(prop, this.reactiveElements);
             }
           }
     
@@ -95,7 +95,10 @@ function buildElementClass(data, content, methods) {
 
     connectedCallback() {
       this.assignClickHandlers();
-      this.rerender(Object.keys(data));
+      if (!this.reactiveElements) {
+        this.reactiveElements = this.getReactiveElements(this.shadowRoot);
+      }
+      this.rerender(Object.keys(data), this.reactiveElements);
     }
 
 
@@ -113,59 +116,101 @@ function buildElementClass(data, content, methods) {
 
 
     attributeChangedCallback(name) {
-      this.rerender(name);
+      if (!this.reactiveElements) {
+        this.reactiveElements = this.getReactiveElements(this.shadowRoot);
+      }
+      this.rerender(name, this.reactiveElements);
     }
 
 
-    rerender(names) {
-      this.cacheReactiveElements();
+    rerender(names, reactiveElements, context) {
+      context = context || this.data;
       if (typeof names === 'string') { names = [names]; }
   
       for (const name of names) {
-        for (let i = 0; i < this.reactiveElements[name].length; i++) {
-          const element = this.reactiveElements[name][i];
-          switch(typeof this.data[name]) {
-            case 'object':
-              if (typeof this.data[name][Symbol.iterator] === 'function') {
-                const parent = element.parentNode;
-                parent.innerHTML = '';
+        for (let i = 0; i < (reactiveElements[name] || []).length; i++) {
+          const reactiveData = reactiveElements[name][i];
+          
+          switch(reactiveData.type) {
+            case 'data':
+              reactiveData.element.innerHTML = context[name];
+              break;
+            case 'list':
+              reactiveData.parent.innerHTML = '';
 
-                for (const val of this.data[name]) {
-                  const newElement = parent.appendChild(element.cloneNode(true));
-                  newElement.innerHTML = val;
-                  this.reactiveElements[name][i] = newElement;
-                }
+              for (const val of context[name]) {
+                const newElement = reactiveData.parent
+                  .appendChild(reactiveData.element.cloneNode(true));
+                
+                context[reactiveData.varName] = val;
+                this.rerender(
+                  reactiveData.varName,
+                  this.getReactiveElements(newElement),
+                  context
+                );
               }
               break;
-            case 'symbol':
-            case 'function':
-            case 'undefined':
+            case 'computed':
+              console.log('Setting computed')
+              reactiveData.element.setAttribute(
+                reactiveData.prop,
+                reactiveData.val(context)
+              );
               break;
-            default:
-              element.innerHTML = this.data[name];
           }
         }
       }
     }
 
 
-    cacheReactiveElements() {
-      if (this.reactiveElements) {
-        return this.reactiveElements;
-      }
-
-      this.reactiveElements = {};
-
-      for (const dataName in data) {
-        this.reactiveElements[dataName] = [];
-      }
+    getReactiveElements(parent) {
+      const reactiveElements = {};
       
-      for (const element of this.shadowRoot.querySelectorAll('[data], [for]')) {
-        const name = element.getAttribute('data') || element.getAttribute('for');
-        this.reactiveElements[name].push(element);
+      for (const element of parent.querySelectorAll('[data], [for], [bind]')) {
+        let reactiveData = {};
+        let name;
+
+        if (element.hasAttribute('data')) {
+          name = element.getAttribute('data');
+
+          reactiveData = {
+            type: 'data',
+            element: element
+          }
+        } else if (element.hasAttribute('for')) {
+          const config = element.getAttribute('for')
+            .trim()
+            .match(/(\S+)\s+(in|of)\s+(\S+)/);
+
+          const varName = config[1];
+          name = config[3];
+          
+          reactiveData = {
+            type: 'list',
+            varName: varName,
+            parent: element.parentElement,
+            element: element
+          }
+        } else if (element.hasAttribute('bind')) {
+          name = element.getAttribute(':title');
+
+          for (const attribute of element.attributes) {
+            if (attribute.name.startsWith(':')) {
+              reactiveData = {
+                type: 'computed',
+                element: element,
+                prop: attribute.name.substring(1),
+                val: (o) => o[attribute.value]
+              }
+            }
+          }
+        }
+
+        reactiveElements[name] = reactiveElements[name] || [];
+        reactiveElements[name].push(reactiveData);
       }
 
-      return this.reactiveElements;
+      return reactiveElements;
     }
   };
 

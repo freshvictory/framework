@@ -25,9 +25,13 @@
 
 <template id="post-list">
   <h2>Posts</h2>
-  <post-content title="Hello!"></post-content>
-  <post-content title="Post 2"></post-content>
-  <post-content></post-content>
+  <ul>
+    <li for="l in list">
+      <post-content bind :title="l"></post-content>
+    </li>
+  </ul>
+  <!-- <post-content title="Hello!"></post-content>
+  <post-content title="Post 2"></post-content> -->
 </template>
 
 <script type="module">
@@ -43,7 +47,7 @@
   <p data="title"></p>
   <p data="count"></p>
   <ul>
-    <li for="list"></li>
+    <li for="l in list"><p data="l"></p></li>
   </ul>
   <button @click="handleClick">Click me!</button>
 
