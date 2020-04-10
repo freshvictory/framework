@@ -17,18 +17,35 @@
   </header>
   <main>
     <section>
-      Posts
-      <post-content title="Hello!"></post-content>
-      <post-content title="Post 2"></post-content>
-      <post-content></post-content>
+      <post-list></post-list>
     </section>
   </main>
 </body>
 </html>
 
+<template id="post-list">
+  <h2>Posts</h2>
+  <post-content title="Hello!"></post-content>
+  <post-content title="Post 2"></post-content>
+  <post-content></post-content>
+</template>
+
+<script type="module">
+  define({
+    id: 'post-list',
+    data: {
+      list: ['Hello', 'Post 2']
+    }
+  });
+</script>
+
 <template id="post-content">
-  <p><slot name="title">Post</slot></p>
-  <button onclick="handleClick(this)">Click me!</button>
+  <p data="title"></p>
+  <p data="count"></p>
+  <ul>
+    <li></li>
+  </ul>
+  <button @click="handleClick">Click me!</button>
 
   <style>
     p {
@@ -41,11 +58,12 @@
   define({
     id: 'post-content',
     data: {
-      count: 0
+      count: 0,
+      title: 'Post'
     },
-    listeners: {
+    methods: {
       handleClick() {
-        this.title = 'Clicked ' + this.count++ + ' times.';
+        this.title = 'Clicked ' + ++this.count + ' times.';
       }
     }
   });

@@ -17,34 +17,18 @@ export function define(options) {
 
   const template = document.getElementById(options.id);
   const content = template.content;
-  const slots = [...content.querySelectorAll('slot')]
-    .map(s => s.getAttribute('name'));
 
-  const [data, watchers] = computeReactive(options, slots);
-
-  if (options.listeners) {
-    for (const name in options.listeners) {
-      if (window[name]) {
-        return;
-      }
-
-      window[name] = function (el) {
-        return options.listeners[name].bind(
-          el.getRootNode().host.data
-        )();
-      }
-    }
-  }
+  const [data, watchers] = computeReactive(options);
   
   const elementClass = buildElementClass(
-    data, watchers, content, slots
+    data, content, options.methods
   );
 
   customElements.define(options.id, elementClass);
 }
 
 
-function computeReactive(options, slots) {
+function computeReactive(options) {
   const watchers = {};
   const data = {};
   options.data = options.data || {};
@@ -55,11 +39,15 @@ function computeReactive(options, slots) {
         watchers[key] = options.data[key];
         break;
       case 'object':
-        if (options.data[key].default) {
-          data[key] = options.data[key].default;
-        }
-        if (options.data[key].watcher) {
-          watchers[key] = options.data[key].watcher;
+        if (typeof options.data[key][Symbol.iterator] === 'function') {
+          data[key] = options.data[key];
+        } else {
+          if (options.data[key].default) {
+            data[key] = options.data[key].default;
+          }
+          if (options.data[key].watcher) {
+            watchers[key] = options.data[key].watcher;
+          }
         }
         break;
       default:
@@ -68,17 +56,11 @@ function computeReactive(options, slots) {
     }
   }
 
-  for (const slot of slots) {
-    if (!data[slot]) {
-      data[slot] = undefined;
-    }
-  }
-
   return [data, watchers];
 }
 
 
-function buildElementClass(data, watchers, content) {
+function buildElementClass(data, content, methods) {
   const attributes = Object.keys(data);
 
   const elementClass = class extends Component {
@@ -96,7 +78,11 @@ function buildElementClass(data, watchers, content) {
         },
         set: (obj, prop, value) => {
           if (prop in data) {
-            this.setAttribute(prop, value);
+            if (typeof value === 'string' || typeof value === 'number') {
+              this.setAttribute(prop, value);
+            } else {
+              this.rerender(prop);
+            }
           }
 
           obj[prop] = value;
@@ -108,56 +94,57 @@ function buildElementClass(data, watchers, content) {
 
 
     connectedCallback() {
-      this.rerender([]);
+      this.assignClickHandlers();
+      this.rerender(Object.keys(data));
     }
 
 
-    attributeChangedCallback(name, oldValue, newValue) {
-      if (name in watchers) {
-        watchers[name](oldValue, newValue);
-      }
+    assignClickHandlers() {
+      const clickElements = this.shadowRoot.querySelectorAll('[\\@click]');
 
+      for (const clickElement of clickElements) {
+        clickElement.addEventListener(
+          'click',
+          methods[clickElement.getAttribute('@click')]
+            .bind(this.data)
+        );
+      }
+    }
+
+
+    attributeChangedCallback(name) {
       this.rerender(name);
     }
 
 
     rerender(names) {
-      this.initSlots();
+      this.cacheReactiveElements();
       if (typeof names === 'string') { names = [names]; }
   
       for (const name of names) {
-        if (this.slots[name]) {
-          if ('push' in this.slots[name]) {
-            this.slots[name].forEach(s => s.innerHTML = this.data[name]);
-          } else {
-            this.slots[name].innerHTML = this.data[name];
-          }
+        for (const element of this.reactiveElements[name]) {
+          element.innerHTML = this.data[name];
         }
       }
     }
 
 
-    initSlots() {
-      if (this.slots) {
-        return this.slots;
+    cacheReactiveElements() {
+      if (this.reactiveElements) {
+        return this.reactiveElements;
       }
 
-      this.slots = {};
+      this.reactiveElements = {};
 
-      for (const slot of this.shadowRoot.querySelectorAll('slot')) {
-        const name = slot.getAttribute('name');
-        if (name) {
-          if (this.slots[name]) {
-            if ('push' in this.slots[name]) {
-              this.slots[name].push(slot);
-            } else {
-              this.slots[name] = [...this.slots[name], slot];
-            }
-          } else {
-            this.slots[name] = slot;
-          }
-        }
+      for (const dataName in data) {
+        this.reactiveElements[dataName] = [];
       }
+      
+      for (const element of this.shadowRoot.querySelectorAll('[data]')) {
+        this.reactiveElements[element.getAttribute('data')].push(element);
+      }
+
+      return this.reactiveElements;
     }
   };
 
